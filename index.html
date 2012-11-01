@@ -1,0 +1,188 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html><head>
+<title>Twitter Search Tool</title>
+<script src="http://code.jquery.com/jquery-1.7.1.min.js"></script>
+<script src="http://jquery-jsonp.googlecode.com/files/jquery-jsonp-2.2.1.min.js"></script>
+<script src="http://jquery-json.googlecode.com/files/jquery.json-2.3.min.js"></script>
+</head><body>
+<script>
+
+    var followers = new Array();
+    
+    Array.prototype.contains = function(obj) {
+        var i = this.length;
+        while (i--) {
+            if (String(this[i]) === String(obj)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function Date_toYMD(date) {
+        var year, month, day;
+        year = String(date.getFullYear());
+        month = String(date.getMonth() + 1);
+        if (month.length == 1) {
+            month = "0" + month;
+        }
+        day = String(date.getDate());
+        if (day.length == 1) {
+            day = "0" + day;
+        }
+        return year + "-" + month + "-" + day;
+    }
+    
+    function SuccessFollowers(data) {
+        for(var id in data.ids) {
+            followers.push(data.ids[id]);
+        }
+        var s = $.toJSON(data.ids);
+        //s = s.replace("\"", "").replace("\"", "");
+        while(s.indexOf(",")>=0) {
+            s = s.replace(",", "<br/>");
+        }
+        s = s.replace("[", "").replace("]", "");
+        document.getElementById("followers").innerHTML += s + '<br/>';
+        if(data.next_cursor_str!="0") {
+            getFollowers(data.next_cursor_str);
+        } else if(data.next_cursor_str=="0")  {
+            sendSearchRequest(false);
+        }
+    }
+    
+    function getFollowers(cursor) { 
+        document.getElementById("followers").innerHTML = "Followers List: <br/><br/><br/>";
+        document.getElementById("isFollowing").innerHTML = "Tweets by users following: <br/><br/><br/>";
+        document.getElementById("notFollowing").innerHTML = "Tweets by users not following: <br/><br/><br/>";
+        var following = document.getElementById("following").value;
+        var url = 'https://api.twitter.com/1/followers/ids.json?cursor=' + cursor + '&screen_name=' + following + '&callback=?';
+        $.jsonp({
+            url: url,
+            dataType: 'json',
+            cache: false,
+            success: function(data){
+                    SuccessFollowers(data);
+                },
+            error: function(error){
+                    //alert(JSON.stringify(error));
+                 }
+        });
+    }
+    
+    function setRunTime() {
+        document.getElementById("followers").innerHTML = "Followers List: <br/><br/><br/>";
+        document.getElementById("isFollowing").innerHTML = "Tweets by users following: <br/><br/><br/>";
+        document.getElementById("notFollowing").innerHTML = "Tweets by users not following: <br/><br/><br/>";
+        var now = new Date();
+        var endDate = new Date(document.getElementById("endDate").value);
+        var millisTill10 = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), endDate.getHours(), endDate.getMinutes(), endDate.getSeconds(), 0) - now;
+        if (millisTill10 > 0) {
+             alert('Set timer for ' + endDate.toUTCString());
+            setTimeout(function(){getFollowers('-1')}, millisTill10); 
+        } else {
+            getFollowers('-1');
+        }
+    }
+
+    function sendSearchRequest(url) { 
+        //var content = document.getElementById("uuids").value;
+        var query = document.getElementById("query").value;
+        var startDate = new Date(document.getElementById("startDate").value);
+        var endDate = new Date(document.getElementById("endDate").value);
+        if(!url)
+            var url = 'http://search.twitter.com/search.json?q=' + encodeURIComponent(query) + '%20since%3A' + Date_toYMD(startDate).substring(0,10) + 
+                '&with_twitter_user_id=true&rpp=100&page=1&callback=?';
+        $.jsonp({
+            url: url,
+            dataType: 'json',
+            cache: false,
+            success: function(data){
+                    SearchSuccess(data);
+                },
+            error: function(error){
+                    //alert(JSON.stringify(error));
+                 }
+        });
+    }
+    
+    function SearchSuccess(data) {
+        if(data.error==null) {
+            var sd = new Date(document.getElementById("startDate").value);
+            var ed = new Date(document.getElementById("endDate").value);
+            for(var i in data.results) {
+                var td = new Date(data.results[i].created_at);
+                if((sd<td) && (td<ed)) {
+                    if(followers.contains(data.results[i].from_user_id_str)) {
+                        updateContent("isFollowing", data.results[i].from_user);
+                        updateContent("isFollowing", td.toUTCString());
+                        updateContent("isFollowing", "<b>" + td.toUTCString() + ", " + data.results[i].from_user + ' (' + data.results[i].from_user_id_str + '),</b> ' + data.results[i].text);
+                    } else {
+                        updateContent("notFollowing", data.results[i].from_user);
+                        updateContent("notFollowing", td.toUTCString());
+                        updateContent("notFollowing", "<b>" + td.toUTCString() + ", " + data.results[i].from_user + ' (' + data.results[i].from_user_id_str + '),</b> ' + data.results[i].text);
+                    }
+                } else {
+                }
+            }
+            if(data.next_page!=null) {
+                    sendSearchRequest('http://search.twitter.com/search.json' + data.next_page + '&callback=?');
+            }
+        }
+    }
+
+    function updateContent(div, data) {
+        var s = $.toJSON(data);
+        //s = s.replace("\"", "").replace("\"", "");
+        s = s.substring(1, s.length-1);
+        document.getElementById(div).innerHTML += s + '<br/>';
+    }
+
+</script>
+
+<div style="position:relative;top:2%;" align="center" id="logo">
+<!--<img src="/api.png" width="300px"/><br/><br/><br/>-->
+</div>
+
+<div style="position:relative;top:2%;" align="center" id="userParams">
+Start Date (GMT): <textarea rows="1" cols="20" id="startDate" name="startDate" onfocus="if (this.value=='YYYY-MM-DDThr:mn:sc') this.value = ''">YYYY-MM-DDThr:mn:sc</textarea><br/>
+End Date (GMT): <textarea rows="1" cols="20" id="endDate" onfocus="if (this.value=='YYYY-MM-DDThr:mn:sc') this.value = ''">YYYY-MM-DDThr:mn:sc</textarea><br/>
+Following: <textarea rows="1" cols="20" id="following" onfocus="if (this.value=='ATTPremier') this.value = ''">ATTPremier</textarea><br/>
+Query: <textarea rows="1" cols="40" id="query" onfocus="if (this.value=='@ATTPremier #TakeNote #spon') this.value = ''">@ATTPremier #TakeNote #spon</textarea><br/>
+
+<!-- More input fields
+UUIDs & tokens (CSV) <br/>
+<textarea style="visibility:visible;" rows="20" cols="100" id="uuids" name="uuids"></textarea>
+</div>
+-->
+
+<br/>
+<div style="position:relative;top:2%;" align="center" id="butons">
+    <button onClick="setRunTime();">---> <b>Run at End Date</b> <---</button>
+</div>
+<br/>
+<br/>
+
+<table style="border:1px solid black;">
+<tr>
+<td style="border:1px solid black;" valign="top">
+    <div style="position:relative;top:2%;" align="center" id="followers">
+        Followers List: <br/><br/><br/>
+    </div>
+</td>
+<td style="border:1px solid black;" valign="top">
+    <div style="position:relative;top:2%;" align="center" id="isFollowing">
+        Tweets by users following: <br/><br/><br/>
+    </div>
+</td>
+<td style="border:1px solid black;" valign="top">
+    <div style="position:relative;top:2%;" align="center" id="notFollowing">
+        Tweets by users not following: <br/><br/><br/>
+    </div>
+</td>
+</tr>
+</table>
+
+<br/><br/>
+
+</body></html>
